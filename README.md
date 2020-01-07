@@ -8,3 +8,5 @@
 * FCC/CE/KC/RoHS (In Progressing)
 
 ![alt text](https://github.com/wayties/mcon/blob/master/images/wcex-mcon-usba.png "WCEX-MCON-USBA")
+
+![alt text](https://github.com/wayties/mcon/blob/master/images/wcex-mcon-usba-real.png "WCEX-MCON-USBA-REAL")
