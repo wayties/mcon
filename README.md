@@ -1,4 +1,4 @@
-## WCEX-MCON-USBA - Buy from [GroupGets](https://groupgets.com/campaigns/736-automotive-ethernet-to-usb-media-converter)
+## WCEX-MCON-USBA
 ### Automotive Ethernet (IEEE 100BASE-T1) to USB Media Convertor
 
 [![WCEX-MCON-USBA CLIP](https://img.youtube.com/vi/7_dyjh7gOdk/0.jpg)](https://www.youtube.com/watch?v=7_dyjh7gOdk "WCEX-MCON-USBA CLIP")
