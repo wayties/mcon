@@ -1,0 +1,163 @@
+diff -ruN lan9500_linux_1.02.05/dkms.conf smsc9500-1.02.05/dkms.conf
+--- lan9500_linux_1.02.05/dkms.conf	1970-01-01 09:00:00.000000000 +0900
++++ smsc9500-1.02.05/dkms.conf	2020-05-11 13:50:17.999386339 +0900
+@@ -0,0 +1,12 @@
++PACKAGE_VERSION="1.02.05"
++PACKAGE_NAME="smsc9500"
++
++BUILT_MODULE_NAME[0]="smscusbnet"
++BUILT_MODULE_NAME[1]="smsc9500"
++
++DEST_MODULE_LOCATION[0]="/extra"
++DEST_MODULE_LOCATION[1]="/extra"
++
++MAKE[0]="make -C /lib/modules/${kernelver}/build M=${dkms_tree}/${PACKAGE_NAME}/${PACKAGE_VERSION}/build TARGET=smscusbnet; make -C /lib/modules/${kernelver}/build M=${dkms_tree}/${PACKAGE_NAME}/${PACKAGE_VERSION}/build TARGET=smsc9500"
++
++AUTOINSTALL=yes
+diff -ruN lan9500_linux_1.02.05/smsc9500.c smsc9500-1.02.05/smsc9500.c
+--- lan9500_linux_1.02.05/smsc9500.c	2018-03-22 00:14:28.000000000 +0900
++++ smsc9500-1.02.05/smsc9500.c	2020-05-11 13:50:17.999386339 +0900
+@@ -2682,6 +2682,7 @@
+ 		result = -EFAULT;
+ 		goto DONE;
+ 	}
++
+ 	userAddr = ifr->ifr_data;
+ 
+ 	switch(cmd) {
+@@ -5652,12 +5653,18 @@
+ 
+ 	Tx_WakeQueue(dev,0x04UL);
+ 
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
+ 	init_timer(&(dev->LinkPollingTimer));
+ 	dev->StopLinkPolling = FALSE;
+ 	dev->LinkPollingTimer.function = smscusbnet_linkpolling;
+ 	dev->LinkPollingTimer.data = (unsigned long) dev;
+ 	dev->LinkPollingTimer.expires = jiffies+HZ;
+ 	add_timer(&(dev->LinkPollingTimer));
++#else
++	dev->StopLinkPolling = FALSE;
++	dev->LinkPollingTimer.expires = jiffies+HZ;
++	timer_setup(&(dev->LinkPollingTimer), smscusbnet_linkpolling, 0);
++#endif
+ 	tasklet_schedule (&dev->bh);
+ 
+ 	dev->idleCount = 0;
+@@ -5702,12 +5709,18 @@
+ 
+ 		Tx_WakeQueue(dev,0x04UL);
+ 
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
+ 		init_timer(&(dev->LinkPollingTimer));
+ 		dev->StopLinkPolling = FALSE;
+ 		dev->LinkPollingTimer.function = smscusbnet_linkpolling;
+ 		dev->LinkPollingTimer.data = (unsigned long) dev;
+ 		dev->LinkPollingTimer.expires = jiffies+HZ;
+ 		add_timer(&(dev->LinkPollingTimer));
++#else
++		dev->StopLinkPolling = FALSE;
++		dev->LinkPollingTimer.expires = jiffies+HZ;
++		timer_setup(&(dev->LinkPollingTimer), smscusbnet_linkpolling, 0);
++#endif
+ 
+ 		tasklet_schedule (&dev->bh);
+ 
+diff -ruN lan9500_linux_1.02.05/smscusbnet.c smsc9500-1.02.05/smscusbnet.c
+--- lan9500_linux_1.02.05/smscusbnet.c	2018-03-22 00:14:28.000000000 +0900
++++ smsc9500-1.02.05/smscusbnet.c	2020-05-11 13:50:18.003386274 +0900
+@@ -507,9 +507,15 @@
+ 		//devdbg (dev,"myevent %d scheduled", work);
+ }
+ 
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
+ void smscusbnet_linkpolling(unsigned long ptr)
+ {
+ 	struct usbnet * dev = (struct usbnet *) ptr;
++#else
++void smscusbnet_linkpolling(struct timer_list *t)
++{
++	struct usbnet * dev = (struct usbnet *)from_timer(dev, t, LinkPollingTimer);
++#endif
+ 
+ 	if (dev == NULL)
+ 		return;	
+@@ -973,6 +979,13 @@
+ 		}
+ 	}
+ }
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)
++static void  smscusbnet_delay(struct timer_list *t)
++{
++	struct usbnet *dev = (struct usbnet *)from_timer(dev, t, delay);
++  return smscusbnet_bh((unsigned long)dev);
++}
++#endif
+ 
+ // precondition: never called in_interrupt
+ int smscusbnet_stop (struct net_device *net)
+@@ -1287,7 +1300,9 @@
+ #endif
+ 			){
+ 			if((dev->idleCount >= PM_IDLE_DELAY) && 
+-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,31))
++#if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
++				(atomic_read(&dev->uintf->dev.power.usage_count) > 0)){
++#elif (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,31))
+ 				(atomic_read(&dev->uintf->pm_usage_cnt) > 0)){
+ #else
+ 				(dev->uintf->pm_usage_cnt > 0)){
+@@ -1635,7 +1650,9 @@
+ 	struct driver_info *info = dev->driver_info;
+ 
+ #if defined(CONFIG_PM)
+-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,31))
++#if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
++	if (atomic_read(&dev->uintf->dev.power.usage_count) <= 0) {
++#elif (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,31))
+ 	if (atomic_read(&dev->uintf->pm_usage_cnt) <= 0) {
+ #else
+ 	if(dev->uintf->pm_usage_cnt <= 0) {
+@@ -1889,9 +1906,13 @@
+ #else
+ 	INIT_WORK (&dev->myevent, myevent);
+ #endif
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
+ 	dev->delay.function = smscusbnet_bh;
+ 	dev->delay.data = (unsigned long) dev;
+ 	init_timer (&dev->delay);
++#else
++	timer_setup(&dev->delay, smscusbnet_delay, 0);
++#endif
+ 
+ 	dev->tx_qlen = tx_queue_size;
+ 	dev->rx_qlen = rx_queue_size;
+@@ -1942,9 +1963,13 @@
+ 	}
+ 
+ 	dev->StopLinkPolling = FALSE;
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
+ 	dev->LinkPollingTimer.function = smscusbnet_linkpolling;
+ 	dev->LinkPollingTimer.data = (unsigned long) dev;
+ 	init_timer(&(dev->LinkPollingTimer));
++#else
++	timer_setup(&dev->LinkPollingTimer, smscusbnet_linkpolling, 0);
++#endif
+ 
+ 	dev->net = net;
+ 	strcpy (net->name, "usb%d");
+diff -ruN lan9500_linux_1.02.05/smscusbnet.h smsc9500-1.02.05/smscusbnet.h
+--- lan9500_linux_1.02.05/smscusbnet.h	2018-03-22 00:14:28.000000000 +0900
++++ smsc9500-1.02.05/smscusbnet.h	2020-05-11 13:50:18.003386274 +0900
+@@ -247,7 +247,11 @@
+  */
+ extern int smscusbnet_probe(struct usb_interface *, const struct usb_device_id *);
+ extern void smscusbnet_disconnect(struct usb_interface *);
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,14,0)
+ extern void smscusbnet_linkpolling(unsigned long ptr);
++#else
++extern void smscusbnet_linkpolling(struct timer_list *t);
++#endif
+ 
+ /* Drivers that reuse some of the standard USB CDC infrastructure
+  * (notably, using multiple interfaces according to the the CDC
