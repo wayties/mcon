@@ -15,3 +15,34 @@
   
 ![WCEX-MCON-USBA](https://github.com/wayties/mcon/blob/master/images/wcex-mcon-usba.png "WCEX-MCON-USBA")
 ![WCEX-MCON-USBA REAL](https://github.com/wayties/mcon/blob/master/images/wcex-mcon-usba-real.png "WCEX-MCON-USBA REAL")
+
+### Driver Installlation
+
+For more details, refer docs/WCEX-MCON-USBA-UG-001-EN.pdf
+
+#### Driver For Windows 10
+
+In Microsoft Windows 10, NIC driver would be installed automatically.
+
+If you used two or more WCEX- MCON-USBA devices in a network, each device should have own network addresses,
+so you need to check and modify Network Address.
+
+#### Driver For Linux (DKMS)
+
+- Clone driver patch and installation script from our git repository.
+```
+git clone https://github.com/wayties/mcon ~/mcon
+```
+- Download linux driver of Microchip’s LAN9500A at following link.
+
+https://www.microchip.com/SWLibraryWeb/producttc.aspx?product=SRC-LAN95xx-LINUX
+
+- Move Microchip’s LAN9500A driver to linux driver directory.
+```
+mv lan9500_linux_1.02.05.tar.gz ~/mcon/drivers/linux
+```
+- Run DKMS installation script with sudo (root permission)
+```
+cd ~/mcon/drivers/linux
+sudo ./dkms.sh
+```
